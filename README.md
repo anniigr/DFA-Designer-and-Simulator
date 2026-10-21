@@ -1,183 +1,225 @@
 # DFA Designer & Simulator
 
-DFA Designer & Simulator is a WPF desktop application that allows users to visually design deterministic finite automata and simulate their computation on input words, with both step-by-step and animated modes.
+A WPF desktop application for drawing deterministic finite automata on a canvas and watching
+them process input words step by step or as an animation. The automaton logic (model,
+validation, execution) lives in a framework-free library with its own test suite, so the
+rules of a DFA are checked the same way whether a transition is added in the editor or read
+from a JSON file.
 
-The application was created as a part of the Programming in Graphic Enviroment course at Warsaw University of Technology (WUT) during the 4th semester of Computer Science bachelor studies(2026).
+Created for the Programming in Graphical Environments course at Warsaw University of
+Technology (4th semester, 2026). Windows only at runtime (WPF, .NET 9); the core library and its
+tests run on any platform.
 
-## Main idea
+## Preview
 
-The main idea of the application is to provide an interactive canvas-based environment for building and running deterministic finite automata. Users can draw states directly on the canvas, connect them with labeled transitions, customize the visual appearance of each element, and then load an input word to watch the automaton process it in real time.
-
-The interface is split into two views — **Lab** (the editor) and **Home** (the simulator) — so the design and the execution concerns stay clearly separated.
-
-## Technical features
-
-**1. Interactive canvas editor.**
-States are added by double-clicking anywhere on the canvas and can be freely repositioned by dragging. Each state is automatically labelled $q_0, q_1, \ldots, q_n$. A single click activates a state, highlighting it visually; clicking empty canvas space deactivates it. Any state can be marked as initial or accepting via checkboxes — marking a new initial state automatically unmarks the previous one. Accepting states are rendered with a double circle.
-
-**2. Customisable state appearance** via Data Binding.
-Each state exposes four visual properties that can be edited through dedicated controls while the state is active: fill colour, border colour, radius, and border thickness. All changes reflect on the canvas instantly through WPF bindings.
-
-**3. Transition management.**
-Transitions are added through a form with two dropdowns and a symbol field. Labels follow the format `a,b,c` where each symbol is a single character from the alphabet Σ. Regular transitions are rendered as quadratic Bézier curves with an arrowhead; self-loops use an arc segment. Bidirectional transitions between the same pair of states are offset so they never overlap. Transitions can be activated by clicking their label and deleted via a dedicated button. The current alphabet Σ is derived dynamically from all transition labels and displayed in the UI.
-
-**4. Import and export.**
-Automata can be saved to and loaded from JSON files. The file picker opens in the `Samples` folder by default. Imported files are validated — missing fields, broken state references, or malformed JSON all produce descriptive error messages. The canvas can also be exported as an image.
-
-**5. Input word validation and simulation.**
-Before simulation starts, the input word is checked against the current alphabet Σ; any invalid symbol triggers a warning. During simulation, the currently processed character is highlighted in the word display. The input field is locked while a simulation is running.
-
-**6. Step-by-step mode.**
-The `KROK` and `WSTECZ` buttons advance or revert the automaton one step at a time. The active state and transition are highlighted on the canvas at each step. Buttons are automatically disabled when there is nowhere to go (first or last symbol). After the last step, the UI reports whether the word was accepted or rejected.
-
-**7. Animation mode.**
-`Start`, `Stop`, and `Reset` control automatic playback. Animation speed is adjustable via a slider (200–2000 ms per step). All buttons update their enabled state based on context — before loading an automaton everything is disabled, during animation only `Stop` is available, and so on.
-
-**8. Computation history.**
-A list below the controls records every step as a *(state, symbol)* pair. `KROK` appends an entry; `WSTECZ` removes the last one. Loading a new automaton or changing the input word resets the list.
-
-## Interactive features
-
-| 1. Adding and dragging states | 2. Customising state appearance |
+| Adding and dragging states | Customising state appearance |
 | :--: | :--: |
 | ![Adding states](Images/add.gif) | ![Customising states](Images/edit.gif) |
-| 3. Adding transitions and self-loops | 4. Step-by-step simulation |
+| Adding transitions and self-loops | Step-by-step simulation |
 | ![Adding transitions](Images/transitions.gif) | ![Step simulation](Images/simulation.gif) |
-| 5. Animation mode with speed control | 6. Import and export |
+| Animation mode with speed control | Import and export |
 | ![Animation](Images/animation.gif) | ![Import export](Images/import-export.gif) |
+
+## Features
+
+- **Canvas editor.** Double-click to add a state (`q0, q1, …`), drag to move, click to select.
+  Initial and accepting flags are checkboxes; marking a new initial state clears the previous
+  one. Accepting states draw a double circle.
+- **Appearance bound to the model.** Fill, border colour, radius and border thickness of the
+  selected state are edited through controls bound to the `StateModel`; the canvas updates
+  instantly.
+- **Transitions.** From/to dropdowns and a label such as `0,1` (one or more single characters).
+  Regular transitions are quadratic Bézier curves with an arrowhead, self-loops are arcs,
+  opposite transitions between the same pair are offset so they do not overlap. The alphabet Σ
+  is derived from all labels. The editor refuses a second transition on the same symbol from
+  the same state, which is what keeps the automaton deterministic.
+- **Simulation.** The input word is validated against Σ. `KROK`/`WSTECZ` step forward and back
+  with the current state, transition and symbol highlighted; `Start`/`Stop`/`Reset` animate at
+  200–2000 ms per step. A history list records every `(state, symbol) → state` step. The result
+  is reported as accepted, rejected, or stuck (no transition for the symbol, for partial DFAs).
+- **JSON import/export and PNG export.** Files are parsed and validated by the core library
+  before anything is drawn; the error dialog lists every problem found. Three sample automata
+  ship with the app in `Samples/`.
 
 ## Architecture
 
-The application follows the **MVVM** pattern. All state is held in `MainViewModel`; the XAML views bind to it directly. The code-behind in `MainWindow` handles only low-level mouse events for drag-and-drop and transition clicking — everything else goes through commands and bindings.
+```mermaid
+flowchart LR
+    subgraph WPF["AutomatonEditor (WPF, net9.0-windows)"]
+        XAML[MainWindow.xaml<br/>two ItemsControl layers over a Canvas,<br/>DataTemplate triggers]
+        CB[MainWindow.xaml.cs<br/>mouse: drag, double-click, PNG export]
+        VM[MainViewModel<br/>commands, selection, simulation state,<br/>DispatcherTimer animation]
+        M[StateModel · TransitionModel<br/>observable, geometry for the canvas]
+    end
+    subgraph Core["AutomatonEditor.Core (net9.0, no UI)"]
+        DTO[DfaSaveData · DfaJson<br/>file format]
+        VAL[DfaValidator<br/>one initial state, single-char symbols,<br/>determinism, referential integrity]
+        DFA[Dfa<br/>immutable: δ, Σ, accepting set,<br/>completeness, reachability]
+        RUN[DfaRunner<br/>Step · Run · Accepts, trace]
+    end
+    T[AutomatonEditor.Core.Tests<br/>xUnit, runs on macOS/Linux/Windows]
+
+    XAML --> VM
+    CB --> VM
+    VM --> M
+    VM -- Save / Load --> DTO
+    DTO --> VAL --> DFA --> RUN
+    T --> Core
+```
+
+The application follows MVVM: all state is in `MainViewModel`, the XAML binds to it, and the
+code-behind handles only low-level mouse events and the PNG export. Simulation state is a
+`Stack<StateModel>` of visited states; a forward step pushes, a backward step pops. Animation
+runs the same step on each `DispatcherTimer` tick.
 
 ```mermaid
 classDiagram
-    direction TB
-
-    class ObservableObject {
-        +event PropertyChanged
-        #OnPropertyChanged(name)
+    direction LR
+    class Dfa {
+        +IReadOnlyList~string~ States
+        +string InitialState
+        +IReadOnlySet~string~ AcceptingStates
+        +IReadOnlyList~char~ Alphabet
+        +Next(state, symbol) string?
+        +IsAccepting(state) bool
+        +IsComplete bool
+        +UnreachableStates() IReadOnlyList~string~
     }
-
-    class RelayCommand {
-        -Action _execute
-        -Predicate _canExecute
-        +Execute(param)
-        +CanExecute(param) bool
-        +RaiseCanExecuteChanged()
+    class DfaValidator {
+        +Validate(DfaSaveData) IReadOnlyList~DfaProblem~$
+        +TryBuild(DfaSaveData, out Dfa, out problems) bool$
+        +SplitSymbols(label) IReadOnlyList~string~$
     }
-
-    class StateModel {
-        +string Id
-        +string Name
-        +double X, Y
-        +double Radius, Diameter
-        +double CenterX, CenterY
-        +string FillColor
-        +string StrokeColor
-        +double StrokeThickness
-        +bool IsInitial
-        +bool IsAccepting
-        +bool IsActive
-        +bool IsCurrentSimulationState
+    class DfaRunner {
+        +Step(dfa, state, index, word) RunStep?$
+        +Run(dfa, word) RunResult$
+        +Accepts(dfa, word) bool$
+        +IsWordInAlphabet(dfa, word) bool$
     }
-
-    class TransitionModel {
-        +StateModel From
-        +StateModel To
-        +string Symbol
-        +bool IsActive
-        +bool IsSelfLoop
-        +Point StartPoint
-        +Point EndPoint
-        +Point ControlPoint
-        +double MidX, MidY
-        +double Angle
-        -RefreshLine()
+    class RunResult {
+        +RunOutcome Outcome
+        +string FinalState
+        +IReadOnlyList~RunStep~ Steps
+        +int ConsumedSymbols
     }
-
-    class CharDisplayModel {
-        +char Character
-        +bool IsCurrent
-    }
-
-    class DfaSaveData {
-        +StateSaveData[] States
-        +TransitionSaveData[] Transitions
-    }
-
     class MainViewModel {
         +ObservableCollection~StateModel~ States
         +ObservableCollection~TransitionModel~ Transitions
-        +ObservableCollection~CharDisplayModel~ InputWordCharacters
-        +ObservableCollection~string~ SimulationHistorySteps
-        +StateModel SelectedState
-        +TransitionModel SelectedTransition
         +string InputWord
-        +string Alphabet
-        +string SimulationStatus
         +int CurrentSimulationIndex
-        +bool IsAnimating
-        +double AnimationSpeed
-        -Stack~StateModel~ _simulationHistory
-        -DispatcherTimer _animationTimer
-        +AddNewState(x, y)
-        -DeleteState()
-        -AddTransition()
-        -SimulateStep()
-        -SimulatePreviousStep()
-        -StartAnimation()
-        -StopAnimation()
-        -ResetSimulation()
-        -SaveDfa()
-        -LoadDfa()
-        -IsWordValid(word) bool
+        +SimulateStep()
+        +SimulatePreviousStep()
+        +SaveDfa()
+        +LoadDfa()
     }
-
-    class MainWindow {
-        -bool _isDragging
-        -StateModel _draggedState
-        -Point _dragOffset
-        +Canvas_MouseLeftButtonDown()
-        +Canvas_MouseMove()
-        +Canvas_MouseLeftButtonUp()
-        +Transition_MouseLeftButtonDown()
-        +ExportButton_Click()
-    }
-
-    ObservableObject <|-- StateModel
-    ObservableObject <|-- TransitionModel
-    ObservableObject <|-- CharDisplayModel
-    ObservableObject <|-- MainViewModel
-
-    MainViewModel "1" *-- "0..*" StateModel
-    MainViewModel "1" *-- "0..*" TransitionModel
-    MainViewModel "1" *-- "0..*" CharDisplayModel
-    MainViewModel --> DfaSaveData : serializes / deserializes
-    TransitionModel --> StateModel : From, To
-    MainWindow --> MainViewModel : DataContext
-    MainWindow ..> StateModel : drag & drop
-    MainWindow ..> TransitionModel : click to select
+    DfaValidator ..> Dfa : builds
+    DfaRunner ..> Dfa : executes
+    DfaRunner ..> RunResult
+    MainViewModel ..> DfaValidator : validates files
+    MainViewModel ..> DfaJson : reads / writes
 ```
 
-States and transitions are rendered through two separate `ItemsControl` layers over a shared `Canvas`. State appearance is driven entirely by `DataTemplate.Triggers` — accepting states get a double ellipse, the active state changes border colour, and the current simulation state gets its own highlight. Transitions use `QuadraticBezierSegment` for regular arrows and `ArcSegment` for self-loops, with a `Polygon` arrowhead positioned via `RenderTransform`.
+## Engineering decisions
 
-Simulation state is tracked with a `Stack<StateModel>`. Each forward step pushes the previous state onto the stack and appends a record to `SimulationHistorySteps`; each backward step pops the stack and removes the last record. Animation runs the same `SimulateStep()` on every tick of a `DispatcherTimer` whose interval is bound to the speed slider.
+- **Validation is centralised and re-applied to files.** The editor prevents non-determinism
+  interactively, but a JSON file can be edited by hand. `DfaValidator` checks every rule
+  (exactly one initial state, unique ids and names, single-character symbols, no
+  ε-transitions, no two transitions on the same symbol from one state, no dangling references)
+  and returns all problems at once, so the user fixes the file in one go instead of
+  discovering errors one dialog at a time.
+- **The DFA is immutable and UI-free.** `Dfa` keys δ by `(state, symbol)` and derives Σ from
+  it; `DfaRunner` is a pure function of the automaton and the word. This is what makes the
+  behaviour testable on a Linux CI runner without WPF.
+- **Partial DFAs are allowed and reported.** Missing transitions do not fail validation; a run
+  that hits one ends with `Stuck` and says where. `Dfa.IsComplete` and
+  `Dfa.UnreachableStates()` expose the two most common modelling mistakes.
+- **Geometry stays in the view models.** Bézier control points, label positions and arrow
+  angles are computed in `TransitionModel` from the two endpoints and re-published when a state
+  moves, so dragging a state redraws its transitions through ordinary bindings.
+- **No MVVM framework.** `ObservableObject` and `RelayCommand` are 40 lines; the project does
+  not need more.
 
-## JSON format
+## Getting started
+
+Requirements: .NET SDK 9.0. Running the application requires Windows 10/11.
+
+```bash
+git clone https://github.com/anniigr/DFA-Designer-and-Simulator.git
+cd DFA-Designer-and-Simulator
+dotnet run --project AutomatonEditor          # Windows
+dotnet test AutomatonEditor.Core.Tests        # any OS
+```
+
+On macOS or Linux the WPF project can still be compiled for inspection with
+`dotnet build AutomatonEditor -p:EnableWindowsTargeting=true`.
+
+### Using the editor
+
+1. **Lab** tab: double-click the canvas to add states; tick *Initial* on one and *Accepting*
+   on the final ones; add transitions with the form below the canvas.
+2. **Home** tab: type an input word (only symbols from Σ are accepted), then use `KROK` /
+   `WSTECZ` or `Start`.
+3. **Load** opens the `Samples` folder shipped with the executable:
+   `even-zeros.json` (binary words with an even number of zeros), `ends-with-ab.json`,
+   `divisible-by-3.json` (binary numbers divisible by three).
+
+### JSON format
 
 ```json
 {
   "States": [
-    { "Id": "guid", "Name": "q0", "X": 100, "Y": 200, "IsInitial": true,  "IsAccepting": false },
-    { "Id": "guid", "Name": "q1", "X": 300, "Y": 200, "IsInitial": false, "IsAccepting": true  }
+    { "Id": "q0", "Name": "q0", "X": 120, "Y": 180, "IsInitial": true,  "IsAccepting": true  },
+    { "Id": "q1", "Name": "q1", "X": 360, "Y": 180, "IsInitial": false, "IsAccepting": false }
   ],
   "Transitions": [
-    { "FromId": "guid-q0", "ToId": "guid-q1", "Symbol": "0,1" },
-    { "FromId": "guid-q1", "ToId": "guid-q1", "Symbol": "0"   }
+    { "FromId": "q0", "ToId": "q1", "Symbol": "0" },
+    { "FromId": "q0", "ToId": "q0", "Symbol": "1" },
+    { "FromId": "q1", "ToId": "q0", "Symbol": "0" },
+    { "FromId": "q1", "ToId": "q1", "Symbol": "1" }
   ]
 }
 ```
 
-## Requirements
-The application is built using WPF on .NET 9 (Windows only). 
+`Symbol` may list several single characters separated by commas (`"0,1"`); `Id` is any unique
+string (the editor generates GUIDs).
+
+## Testing
+
+```bash
+dotnet test AutomatonEditor.Core.Tests
+```
+
+| Area | What is covered |
+| --- | --- |
+| `DfaValidatorTests` | Well-formed build; no states; zero or several initial states; non-determinism; multi-character and empty symbols; dangling transitions and duplicate ids; unreachable states and incomplete δ; label splitting |
+| `DfaRunnerTests` | Acceptance table for the even-zeros automaton; full trace of a run; symbols outside Σ; partial DFA getting stuck with position; step-by-step equals the full run |
+| `DfaJsonTests` | JSON round trip; malformed documents reported, not thrown; every shipped sample is a valid DFA |
+
+CI (`.github/workflows/ci.yml`) runs the core tests on Ubuntu and builds the WPF solution on
+Windows for every push and pull request. The interactive canvas behaviour is demonstrated by
+the recordings above; it is not covered by automated UI tests.
+
+## Project structure
+
+```
+DFA-Designer-and-Simulator/
+├── AutomatonEditor/                 WPF application
+│   ├── MainWindow.xaml(.cs)         canvas, templates, mouse handling, PNG export
+│   └── Core/                        MainViewModel, StateModel, TransitionModel, converters
+├── AutomatonEditor.Core/            Dfa, DfaValidator, DfaRunner, DfaSaveData, DfaJson
+├── AutomatonEditor.Core.Tests/      xUnit tests
+├── Samples/                         example automata (copied next to the executable)
+├── Images/                          recordings used above
+└── task_pl_*.{md,pdf}               original course assignment (Polish)
+```
+
+## Limitations
+
+- **UI strings are Polish** (course requirement); the README and the core library are English.
+- **No NFA, ε-transitions or minimisation.** The tool models DFAs only; files with ε or
+  duplicate symbols are rejected rather than converted.
+- **Editing during a simulation is not blocked.** Deleting the current state mid-run resets
+  the simulation on the next step.
+- **PNG export renders the current visual tree**, so very large automata are exported at
+  screen resolution.
+- **No automated UI tests**; WPF interaction is verified manually (see the GIFs).

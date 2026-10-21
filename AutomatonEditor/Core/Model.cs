@@ -7,6 +7,7 @@ using System.Windows.Input;
 
 namespace DfaSimulator.Core
 {
+    // DfaSaveData, StateSaveData and TransitionSaveData live in AutomatonEditor.Core (shared with the tests).
     public class ObservableObject : INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged;
@@ -208,29 +209,6 @@ namespace DfaSimulator.Core
 
         public bool IsSelfLoop => From == To;
         public bool IsNotSelfLoop => From != To;
-    }
-
-    public class DfaSaveData
-    {
-        public StateSaveData[] States { get; set; }
-        public TransitionSaveData[] Transitions { get; set; }
-    }
-
-    public class StateSaveData
-    {
-        public string Id { get; set; }
-        public string Name { get; set; }
-        public double X { get; set; }
-        public double Y { get; set; }
-        public bool IsInitial { get; set; }
-        public bool IsAccepting { get; set; }
-    }
-
-    public class TransitionSaveData
-    {
-        public string FromId { get; set; }
-        public string ToId { get; set; }
-        public string Symbol { get; set; }
     }
 
     public class OffsetConverter : IValueConverter

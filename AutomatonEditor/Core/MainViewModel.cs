@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
+using AutomatonEditor.Core;
 
 namespace DfaSimulator.Core
 {
@@ -360,7 +361,7 @@ namespace DfaSimulator.Core
                     }).ToArray()
                 };
 
-                File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(data));
+                File.WriteAllText(dialog.FileName, DfaJson.Serialize(data));
                 MessageBox.Show("Zapisano pomyślnie!");
             }
         }
@@ -379,11 +380,22 @@ namespace DfaSimulator.Core
                 try
                 {
                     var json = File.ReadAllText(dialog.FileName);
-                    var data = JsonSerializer.Deserialize<DfaSaveData>(json);
+                    var data = DfaJson.TryDeserialize(json, out var parseError);
 
-                    if (data == null || data.States == null || data.Transitions == null)
+                    if (data == null)
                     {
-                        MessageBox.Show("Błąd: Nieprawidłowy format pliku JSON. Brak stanów lub przejść.",
+                        MessageBox.Show($"Błąd: Plik nie jest poprawnym plikiem JSON.\nSzczegóły: {parseError}",
+                                        "Błąd parsowania", MessageBoxButton.OK, MessageBoxImage.Error);
+                        return;
+                    }
+
+                    // The same rules the editor enforces interactively (one initial state, single-character
+                    // symbols, determinism, no dangling transitions) are re-checked for files, which may be hand-edited.
+                    var problems = DfaValidator.Validate(data);
+                    if (problems.Count > 0)
+                    {
+                        MessageBox.Show("Plik nie opisuje poprawnego automatu DFA:\n\n - " +
+                                        string.Join("\n - ", problems.Select(p => p.Message)),
                                         "Błąd walidacji", MessageBoxButton.OK, MessageBoxImage.Error);
                         return;
                     }
@@ -451,17 +463,12 @@ namespace DfaSimulator.Core
                         {
                             From = fromState,
                             To = toState,
-                            Symbol = string.IsNullOrWhiteSpace(t.Symbol) ? "ε" : t.Symbol
+                            Symbol = t.Symbol
                         });
                     }
 
                     OnPropertyChanged(nameof(Alphabet));
                     MessageBox.Show("Automat wczytany poprawnie!", "Sukces", MessageBoxButton.OK, MessageBoxImage.Information);
-                }
-                catch (JsonException ex)
-                {
-                    MessageBox.Show($"Błąd: Plik nie jest poprawnym plikiem JSON.\nSzczegóły: {ex.Message}",
-                                    "Błąd parsowania", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 catch (Exception ex)
                 {

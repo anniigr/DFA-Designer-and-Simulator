@@ -8,5 +8,13 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AutomatonEditor.Core\AutomatonEditor.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Sample automata are shipped next to the executable; the Load dialog opens there. -->
+  <ItemGroup>
+    <None Include="..\Samples\*.json" Link="Samples\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
 </Project>

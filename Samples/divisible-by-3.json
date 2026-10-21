@@ -1,0 +1,15 @@
+{
+  "States": [
+    { "Id": "r0", "Name": "q0", "X": 100, "Y": 120, "IsInitial": true,  "IsAccepting": true },
+    { "Id": "r1", "Name": "q1", "X": 360, "Y": 120, "IsInitial": false, "IsAccepting": false },
+    { "Id": "r2", "Name": "q2", "X": 230, "Y": 320, "IsInitial": false, "IsAccepting": false }
+  ],
+  "Transitions": [
+    { "FromId": "r0", "ToId": "r0", "Symbol": "0" },
+    { "FromId": "r0", "ToId": "r1", "Symbol": "1" },
+    { "FromId": "r1", "ToId": "r2", "Symbol": "0" },
+    { "FromId": "r1", "ToId": "r0", "Symbol": "1" },
+    { "FromId": "r2", "ToId": "r1", "Symbol": "0" },
+    { "FromId": "r2", "ToId": "r2", "Symbol": "1" }
+  ]
+}
